@@ -16,6 +16,7 @@ import ExperimentResults from "./pages/ExperimentResults";
 import Multiplayer from "./pages/Multiplayer";
 import Shop from "./pages/Shop";
 import Leaderboards from "./pages/Leaderboards";
+import Guilds from "./pages/Guilds";
 import LabProgressTracker from "./pages/LabProgressTracker";
 import LabRecommendations from "./pages/LabRecommendations";
 import LabHistory from "./pages/LabHistory";
@@ -59,6 +60,8 @@ const App = () => (
             <Route path="/shop" element={<Shop />} />
             <Route path="/leaderboards" element={<Leaderboards />} />
             <Route path="/leaderboards/:branchId" element={<Leaderboards />} />
+            <Route path="/guilds" element={<Guilds />} />
+            <Route path="/guilds/:branchId" element={<Guilds />} />
           </Route>
           
           {/* Redirects */}
