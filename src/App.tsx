@@ -24,6 +24,7 @@ import LabNotes from "./pages/LabNotes";
 import LabChallenges from "./pages/LabChallenges";
 import AppLayout from "./components/layout/AppLayout";
 import NotFound from "./pages/NotFound";
+import EconomyDashboard from "./pages/EconomyDashboard";
 
 const queryClient = new QueryClient();
 
@@ -62,6 +63,8 @@ const App = () => (
             <Route path="/leaderboards/:branchId" element={<Leaderboards />} />
             <Route path="/guilds" element={<Guilds />} />
             <Route path="/guilds/:branchId" element={<Guilds />} />
+            <Route path="/economy-dashboard" element={<EconomyDashboard />} />
+            <Route path="/economy-dashboard/:branchId" element={<EconomyDashboard />} />
           </Route>
           
           {/* Redirects */}
