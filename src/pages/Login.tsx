@@ -1,20 +1,39 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { useSpring, animated } from "@react-spring/web";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Checkbox } from "@/components/ui/checkbox";
-import { Eye, EyeOff, Fingerprint, Mail } from "lucide-react";
+import { Eye, EyeOff, Mail, User } from "lucide-react";
 import { toast } from "sonner";
+import { supabase } from "@/integrations/supabase/client";
 
 const Login = () => {
   const navigate = useNavigate();
+  const [isSignUp, setIsSignUp] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
-  const [rememberMe, setRememberMe] = useState(false);
+  const [confirmPassword, setConfirmPassword] = useState("");
+  const [fullName, setFullName] = useState("");
   const [isLoading, setIsLoading] = useState(false);
+
+  // Check if user is already logged in
+  useEffect(() => {
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      if (session) {
+        navigate("/home");
+      }
+    });
+
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
+      if (session) {
+        navigate("/home");
+      }
+    });
+
+    return () => subscription.unsubscribe();
+  }, [navigate]);
 
   // Scientist character animations
   const [characterState, setCharacterState] = useState<"idle" | "writing" | "turned" | "peeking">("idle");
@@ -23,16 +42,6 @@ const Login = () => {
     from: { x: -300, opacity: 0 },
     to: { x: 0, opacity: 1 },
     config: { duration: 2000 },
-  });
-
-  const briefcaseSpring = useSpring({
-    from: { y: 0, rotate: 0, opacity: 1 },
-    to: async (next) => {
-      await next({ y: -100, rotate: 45, opacity: 1 });
-      await next({ y: -120, rotate: 90, opacity: 0.8 });
-      await next({ y: 0, rotate: 0, opacity: 0 });
-    },
-    config: { tension: 80, friction: 10 },
   });
 
   const handleEmailFocus = () => {
@@ -48,32 +57,78 @@ const Login = () => {
     setCharacterState(showPassword ? "turned" : "peeking");
   };
 
-  const handleLogin = async (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    
-    if (!email || !password) {
-      toast.error("Please fill in all fields");
+    setIsLoading(true);
+
+    try {
+      if (isSignUp) {
+        // Validation
+        if (!fullName.trim()) {
+          toast.error("Full name is required");
+          setIsLoading(false);
+          return;
+        }
+
+        if (password !== confirmPassword) {
+          toast.error("Passwords don't match");
+          setIsLoading(false);
+          return;
+        }
+
+        if (password.length < 6) {
+          toast.error("Password must be at least 6 characters");
+          setIsLoading(false);
+          return;
+        }
+
+        // Sign up
+        const { error } = await supabase.auth.signUp({
+          email,
+          password,
+          options: {
+            data: { full_name: fullName },
+            emailRedirectTo: `${window.location.origin}/home`,
+          },
+        });
+
+        if (error) throw error;
+
+        toast.success("Account created! Welcome to VirtualLabX");
+      } else {
+        // Sign in
+        const { error } = await supabase.auth.signInWithPassword({
+          email,
+          password,
+        });
+
+        if (error) throw error;
+
+        toast.success("Welcome back!");
+      }
+    } catch (error: any) {
+      toast.error(error.message || "Authentication failed");
+      setIsLoading(false);
+    }
+  };
+
+  const handleForgotPassword = async () => {
+    if (!email) {
+      toast.error("Please enter your email address");
       return;
     }
 
-    setIsLoading(true);
-    
-    // Mock authentication
-    setTimeout(() => {
-      if (email && password.length >= 6) {
-        setCharacterState("idle");
-        toast.success("Login successful!");
-        setTimeout(() => navigate("/home"), 500);
-      } else {
-        toast.error("Invalid credentials");
-        setIsLoading(false);
-      }
-    }, 1500);
-  };
+    try {
+      const { error } = await supabase.auth.resetPasswordForEmail(email, {
+        redirectTo: `${window.location.origin}/reset-password`,
+      });
 
-  const handleGuestMode = () => {
-    toast.info("Entering guest mode (limited to 5 experiments)");
-    setTimeout(() => navigate("/home"), 500);
+      if (error) throw error;
+
+      toast.success("Password reset email sent!");
+    } catch (error: any) {
+      toast.error(error.message);
+    }
   };
 
   return (
@@ -113,7 +168,7 @@ const Login = () => {
           </svg>
         </animated.div>
 
-        {/* Login card */}
+        {/* Login/Signup card */}
         <div className="bg-card rounded-lg shadow-lg p-8 border animate-vlx-scale">
           {/* Logo */}
           <div className="flex justify-center mb-8">
@@ -123,10 +178,32 @@ const Login = () => {
             </svg>
           </div>
 
-          <h1 className="text-2xl font-bold text-center mb-2">Welcome Back</h1>
-          <p className="text-muted-foreground text-center mb-6">Sign in to continue your experiments</p>
+          <h1 className="text-2xl font-bold text-center mb-2">
+            {isSignUp ? "Join VirtualLabX" : "Welcome Back"}
+          </h1>
+          <p className="text-muted-foreground text-center mb-6">
+            {isSignUp ? "Create your account to start experimenting" : "Sign in to continue your experiments"}
+          </p>
 
-          <form onSubmit={handleLogin} className="space-y-4">
+          <form onSubmit={handleSubmit} className="space-y-4">
+            {isSignUp && (
+              <div className="space-y-2">
+                <Label htmlFor="fullName">Full Name</Label>
+                <div className="relative">
+                  <User className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                  <Input
+                    id="fullName"
+                    type="text"
+                    placeholder="Dr. Jane Smith"
+                    value={fullName}
+                    onChange={(e) => setFullName(e.target.value)}
+                    className="pl-10"
+                    required
+                  />
+                </div>
+              </div>
+            )}
+
             {/* Email field */}
             <div className="space-y-2">
               <Label htmlFor="email">Email</Label>
@@ -169,47 +246,58 @@ const Login = () => {
               </div>
             </div>
 
-            {/* Remember me */}
-            <div className="flex items-center space-x-2">
-              <Checkbox 
-                id="remember" 
-                checked={rememberMe}
-                onCheckedChange={(checked) => setRememberMe(checked as boolean)}
-              />
-              <label htmlFor="remember" className="text-sm text-muted-foreground cursor-pointer">
-                Remember me
-              </label>
-            </div>
+            {isSignUp && (
+              <div className="space-y-2">
+                <Label htmlFor="confirmPassword">Confirm Password</Label>
+                <Input
+                  id="confirmPassword"
+                  type={showPassword ? "text" : "password"}
+                  placeholder="••••••••"
+                  value={confirmPassword}
+                  onChange={(e) => setConfirmPassword(e.target.value)}
+                  required
+                />
+              </div>
+            )}
 
-            {/* Login button */}
+            {!isSignUp && (
+              <div className="flex justify-end">
+                <button
+                  type="button"
+                  onClick={handleForgotPassword}
+                  className="text-sm text-primary hover:underline"
+                >
+                  Forgot password?
+                </button>
+              </div>
+            )}
+
+            {/* Submit button */}
             <Button type="submit" className="w-full" disabled={isLoading}>
-              {isLoading ? "Authenticating..." : "Sign In"}
-            </Button>
-
-            {/* Biometric login */}
-            <Button type="button" variant="outline" className="w-full" onClick={() => toast.info("Biometric auth coming soon")}>
-              <Fingerprint className="mr-2 h-4 w-4" />
-              Use Biometric
-            </Button>
-
-            {/* Guest mode */}
-            <Button type="button" variant="ghost" className="w-full text-muted-foreground" onClick={handleGuestMode}>
-              Continue as Guest
+              {isLoading
+                ? isSignUp
+                  ? "Creating account..."
+                  : "Signing in..."
+                : isSignUp
+                ? "Create Account"
+                : "Sign In"}
             </Button>
           </form>
 
-          {/* Footer links */}
-          <div className="mt-6 text-center space-y-2">
-            <button className="text-sm text-primary hover:underline">
-              Forgot password?
+          {/* Toggle between login/signup */}
+          <p className="mt-6 text-center text-sm text-muted-foreground">
+            {isSignUp ? "Already have an account?" : "Don't have an account?"}{" "}
+            <button
+              onClick={() => {
+                setIsSignUp(!isSignUp);
+                setConfirmPassword("");
+                setFullName("");
+              }}
+              className="text-primary hover:underline font-medium"
+            >
+              {isSignUp ? "Sign in" : "Sign up"}
             </button>
-            <p className="text-sm text-muted-foreground">
-              Don't have an account?{" "}
-              <button className="text-primary hover:underline">
-                Sign up
-              </button>
-            </p>
-          </div>
+          </p>
         </div>
       </div>
     </div>
